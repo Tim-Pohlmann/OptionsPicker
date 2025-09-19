@@ -64,9 +64,9 @@ public class OptionTests
     [TestMethod]
     public void Options_WithSameContent_ShouldBeEqual()
     {
-        var option1 = new Option { Name = "Test", Weight = 1.0 };
-        var option2 = new Option { Name = "Test", Weight = 1.0 };
-        
+        var option1 = Option.Create("Test", 1.0);
+        var option2 = Option.Create("Test", 1.0);
+
         option1.ShouldNotBe(option2); // Different IDs
         option1.Name.ShouldBe(option2.Name);
         option1.Weight.ShouldBe(option2.Weight);
