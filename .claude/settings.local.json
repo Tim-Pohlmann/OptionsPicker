@@ -2,7 +2,17 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:docs.claude.com)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(dotnet --list-sdks)",
+      "Bash(echo $PATH)",
+      "Bash(ls:*)",
+      "Bash(dotnet test)",
+      "Bash(DOTNET_ROOT=\"/mnt/c/Program Files/dotnet\" \"/mnt/c/Program Files/dotnet/dotnet.exe\" test)",
+      "Bash(dotnet build)",
+      "Bash(dotnet clean:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }
