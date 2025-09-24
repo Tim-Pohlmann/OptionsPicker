@@ -1,0 +1,296 @@
+@using OptionsPicker.Models
+@using OptionsPicker.Services
+@inject IStateManager StateManager
+@implements IDisposable
+
+<div class="options-manager">
+    <div class="header">
+        <h2>Options Manager</h2>
+        <div class="summary">
+            @if (options.Any())
+            {
+                <span class="option-count">@options.Count option@(options.Count == 1 ? "" : "s")</span>
+                <span class="total-weight">Total weight: @options.Sum(o => o.Weight):F1</span>
+            }
+            else
+            {
+                <span class="no-options">No options added yet</span>
+            }
+        </div>
+    </div>
+
+    <!-- Add New Option Form -->
+    <div class="add-option-form">
+        <div class="form-row">
+            <input @bind="newOptionName"
+                   @onkeyup="HandleKeyUp"
+                   placeholder="Enter option name..."
+                   class="option-name-input @(validationError ? "error" : "")"
+                   @ref="nameInputRef" />
+
+            <input @bind="newOptionWeight"
+                   type="number"
+                   min="0.1"
+                   step="0.1"
+                   placeholder="Weight"
+                   class="option-weight-input" />
+
+            <button @onclick="AddOption"
+                    disabled="@(string.IsNullOrWhiteSpace(newOptionName) || newOptionWeight <= 0)"
+                    class="add-button">
+                Add Option
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(validationMessage))
+        {
+            <div class="validation-message @(validationError ? "error" : "success")">
+                @validationMessage
+            </div>
+        }
+    </div>
+
+    <!-- Options List -->
+    @if (options.Any())
+    {
+        <div class="options-list">
+            @foreach (var option in options)
+            {
+                <div class="option-item @(editingOptionId == option.Id ? "editing" : "")">
+                    @if (editingOptionId == option.Id)
+                    {
+                        <!-- Edit Mode -->
+                        <div class="edit-form">
+                            <input @bind="editOptionName" class="edit-name-input" />
+                            <input @bind="editOptionWeight"
+                                   type="number"
+                                   min="0.1"
+                                   step="0.1"
+                                   class="edit-weight-input" />
+                            <div class="edit-buttons">
+                                <button @onclick="SaveEdit" class="save-button">Save</button>
+                                <button @onclick="CancelEdit" class="cancel-button">Cancel</button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Display Mode -->
+                        <div class="option-display" @ondblclick="() => StartEdit(option)">
+                            <div class="option-info">
+                                <span class="option-name">@option.Name</span>
+                                <span class="option-weight">Weight: @option.Weight.ToString("F1")</span>
+                                <span class="option-percentage">(@GetPercentage(option).ToString("F1")%)</span>
+                            </div>
+
+                            <div class="weight-bar">
+                                <div class="weight-fill" style="width: @(GetPercentage(option).ToString("F1"))%"></div>
+                            </div>
+
+                            <div class="option-actions">
+                                <button @onclick="() => StartEdit(option)" class="edit-button">✏️ Edit</button>
+                                <button @onclick="() => RemoveOption(option.Id)" class="remove-button">🗑️ Remove</button>
+                            </div>
+                        </div>
+                        <div class="edit-hint">Double-click to edit</div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="bulk-actions">
+            <button @onclick="ClearAllOptions" class="clear-all-button">Clear All</button>
+            <button @onclick="ResetAllWeights" class="reset-weights-button">Reset All Weights to 1.0</button>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Option> options = new();
+    private string newOptionName = "";
+    private double newOptionWeight = 1.0;
+    private string validationMessage = "";
+    private bool validationError = false;
+
+    private Guid? editingOptionId = null;
+    private string editOptionName = "";
+    private double editOptionWeight = 1.0;
+
+    private ElementReference nameInputRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        StateManager.OptionsChanged += OnOptionsChanged;
+
+        // Load state from URL on startup
+        StateManager.LoadFromUrl();
+
+        // Get initial options
+        options = StateManager.CurrentOptions.ToList();
+
+        // Focus on name input after render
+        await Task.Delay(100);
+        await nameInputRef.FocusAsync();
+    }
+
+    private void OnOptionsChanged(object? sender, IReadOnlyList<Option> updatedOptions)
+    {
+        options = updatedOptions.ToList();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(newOptionName) && newOptionWeight > 0)
+        {
+            await AddOption();
+        }
+    }
+
+    private async Task AddOption()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(newOptionName))
+            {
+                SetValidationMessage("Please enter an option name.", true);
+                return;
+            }
+
+            if (newOptionWeight <= 0)
+            {
+                SetValidationMessage("Weight must be greater than 0.", true);
+                return;
+            }
+
+            var option = Option.Create(newOptionName.Trim(), newOptionWeight);
+            StateManager.AddOption(option);
+
+            // Reset form
+            newOptionName = "";
+            newOptionWeight = 1.0;
+
+            SetValidationMessage($"Added '{option.Name}' successfully!", false);
+
+            // Focus back on name input
+            await nameInputRef.FocusAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            SetValidationMessage(ex.Message, true);
+        }
+    }
+
+    private void StartEdit(Option option)
+    {
+        editingOptionId = option.Id;
+        editOptionName = option.Name;
+        editOptionWeight = option.Weight;
+    }
+
+    private void SaveEdit()
+    {
+        if (editingOptionId == null) return;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(editOptionName))
+            {
+                SetValidationMessage("Please enter an option name.", true);
+                return;
+            }
+
+            if (editOptionWeight <= 0)
+            {
+                SetValidationMessage("Weight must be greater than 0.", true);
+                return;
+            }
+
+            var originalOption = options.FirstOrDefault(o => o.Id == editingOptionId);
+            if (originalOption == null) return;
+
+            var updatedOption = originalOption with { Name = editOptionName.Trim(), Weight = editOptionWeight };
+            StateManager.UpdateOption(updatedOption);
+
+            CancelEdit();
+            SetValidationMessage($"Updated '{updatedOption.Name}' successfully!", false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            SetValidationMessage(ex.Message, true);
+        }
+    }
+
+    private void CancelEdit()
+    {
+        editingOptionId = null;
+        editOptionName = "";
+        editOptionWeight = 1.0;
+        ClearValidationMessage();
+    }
+
+    private void RemoveOption(Guid optionId)
+    {
+        var option = options.FirstOrDefault(o => o.Id == optionId);
+        if (option != null)
+        {
+            StateManager.RemoveOption(optionId);
+            SetValidationMessage($"Removed '{option.Name}'.", false);
+        }
+    }
+
+    private void ClearAllOptions()
+    {
+        if (options.Any())
+        {
+            StateManager.UpdateOptions(new List<Option>());
+            SetValidationMessage("All options cleared.", false);
+        }
+    }
+
+    private void ResetAllWeights()
+    {
+        if (options.Any())
+        {
+            var resetOptions = options.Select(o => o with { Weight = 1.0 }).ToList();
+            StateManager.UpdateOptions(resetOptions);
+            SetValidationMessage("All weights reset to 1.0.", false);
+        }
+    }
+
+    private double GetPercentage(Option option)
+    {
+        var totalWeight = options.Sum(o => o.Weight);
+        return totalWeight > 0 ? (option.Weight / totalWeight) * 100 : 0;
+    }
+
+    private void SetValidationMessage(string message, bool isError)
+    {
+        validationMessage = message;
+        validationError = isError;
+
+        // Clear message after 3 seconds
+        Task.Delay(3000).ContinueWith(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                if (validationMessage == message) // Only clear if it's still the same message
+                {
+                    ClearValidationMessage();
+                    StateHasChanged();
+                }
+            });
+        });
+    }
+
+    private void ClearValidationMessage()
+    {
+        validationMessage = "";
+        validationError = false;
+    }
+
+    public void Dispose()
+    {
+        StateManager.OptionsChanged -= OnOptionsChanged;
+    }
+}
