@@ -1,0 +1,202 @@
+.spinning-wheel-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding: 32px 20px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 20px;
+    margin: 24px 0;
+    border: 1px solid #e2e8f0;
+}
+
+.wheel-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wheel-canvas {
+    border-radius: 50%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.wheel-canvas:hover {
+    transform: scale(1.02);
+}
+
+.wheel-canvas.spinning {
+    cursor: wait;
+}
+
+.wheel-pointer {
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+}
+
+.pointer-triangle {
+    width: 0;
+    height: 0;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    border-top: 25px solid #dc2626;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.wheel-result {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.95);
+    padding: 16px 24px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    z-index: 5;
+    animation: resultAppear 0.5s ease-out;
+    backdrop-filter: blur(4px);
+}
+
+@keyframes resultAppear {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.result-text {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1e293b;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.wheel-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.spin-button {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 16px 32px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 200px;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);
+    transition: all 0.3s ease;
+}
+
+.spin-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 25px rgba(245, 158, 11, 0.4);
+    background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+}
+
+.spin-button:disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.spin-button.spinning {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    animation: spinButtonPulse 1.5s infinite;
+}
+
+@keyframes spinButtonPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.spin-icon {
+    font-size: 20px;
+    display: inline-block;
+}
+
+.spinning-icon {
+    animation: iconSpin 1s linear infinite;
+}
+
+@keyframes iconSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.no-options-wheel-message {
+    background: #fef3cd;
+    color: #92400e;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid #fcd34d;
+    text-align: center;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .spinning-wheel-container {
+        padding: 24px 16px;
+        margin: 16px 0;
+    }
+
+    .wheel-canvas {
+        width: 300px !important;
+        height: 300px !important;
+    }
+
+    .spin-button {
+        padding: 14px 28px;
+        font-size: 16px;
+        min-width: 180px;
+    }
+
+    .result-text {
+        font-size: 16px;
+    }
+
+    .pointer-triangle {
+        border-left: 12px solid transparent;
+        border-right: 12px solid transparent;
+        border-top: 20px solid #dc2626;
+    }
+}
+
+@media (max-width: 480px) {
+    .wheel-canvas {
+        width: 250px !important;
+        height: 250px !important;
+    }
+
+    .spin-button {
+        padding: 12px 24px;
+        font-size: 14px;
+        min-width: 160px;
+    }
+
+    .spinning-wheel-container {
+        padding: 20px 12px;
+    }
+}

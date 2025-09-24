@@ -1,0 +1,224 @@
+@using OptionsPicker.Models
+@using OptionsPicker.Services
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="spinning-wheel-container">
+    <div class="wheel-wrapper">
+        <canvas @ref="canvasRef"
+                class="wheel-canvas @(isSpinning ? "spinning" : "")"
+                width="400"
+                height="400"
+                @onclick="OnWheelClick">
+        </canvas>
+
+        <div class="wheel-pointer">
+            <div class="pointer-triangle"></div>
+        </div>
+
+        @if (selectedOption != null && !isSpinning)
+        {
+            <div class="wheel-result">
+                <div class="result-text">🎉 @selectedOption.Name!</div>
+            </div>
+        }
+    </div>
+
+    <div class="wheel-controls">
+        <button @onclick="SpinWheel"
+                disabled="@(isSpinning || !options.Any())"
+                class="spin-button @(isSpinning ? "spinning" : "")">
+            @if (isSpinning)
+            {
+                <span class="spin-icon spinning-icon">🌪️</span>
+                <span>Spinning...</span>
+            }
+            else
+            {
+                <span class="spin-icon">🎯</span>
+                <span>Spin the Wheel!</span>
+            }
+        </button>
+
+        @if (!options.Any())
+        {
+            <div class="no-options-wheel-message">
+                Add some options above to spin the wheel!
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<Option> Options { get; set; } = new List<Option>();
+    [Parameter] public EventCallback<Option> OnOptionSelected { get; set; }
+
+    private ElementReference canvasRef;
+    private bool isSpinning = false;
+    private Option? selectedOption = null;
+    private IReadOnlyList<Option> options = new List<Option>();
+    private IJSObjectReference? jsModule;
+
+    // Wheel segment data
+    private List<WheelSegment> segments = new();
+
+    private class WheelSegment
+    {
+        public Option Option { get; set; } = null!;
+        public double StartAngle { get; set; }
+        public double EndAngle { get; set; }
+        public string Color { get; set; } = "";
+        public double Percentage { get; set; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/wheel.js");
+            await UpdateOptions();
+        }
+        else if (options != Options)
+        {
+            await UpdateOptions();
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (options != Options)
+        {
+            options = Options;
+            _ = Task.Run(UpdateOptions); // Don't await to avoid blocking
+        }
+    }
+
+    private async Task UpdateOptions()
+    {
+        if (!options.Any())
+        {
+            segments.Clear();
+            if (jsModule != null)
+            {
+                await jsModule.InvokeVoidAsync("clearWheel", canvasRef);
+            }
+            return;
+        }
+
+        // Calculate segments
+        var totalWeight = options.Sum(o => o.Weight);
+        var currentAngle = 0.0;
+        segments.Clear();
+
+        var colors = GenerateColors(options.Count);
+
+        for (int i = 0; i < options.Count; i++)
+        {
+            var option = options[i];
+            var percentage = (option.Weight / totalWeight) * 100;
+            var segmentAngle = (option.Weight / totalWeight) * 360;
+
+            segments.Add(new WheelSegment
+            {
+                Option = option,
+                StartAngle = currentAngle,
+                EndAngle = currentAngle + segmentAngle,
+                Color = colors[i],
+                Percentage = percentage
+            });
+
+            currentAngle += segmentAngle;
+        }
+
+        // Draw the wheel
+        if (jsModule != null)
+        {
+            await jsModule.InvokeVoidAsync("drawWheel", canvasRef, segments.Select(s => new
+            {
+                s.Option.Name,
+                s.StartAngle,
+                s.EndAngle,
+                s.Color,
+                s.Percentage
+            }).ToArray());
+        }
+    }
+
+    private async Task SpinWheel()
+    {
+        if (isSpinning || !options.Any() || jsModule == null) return;
+
+        isSpinning = true;
+        selectedOption = null;
+        StateHasChanged();
+
+        try
+        {
+            // Calculate which option should be selected based on weights
+            var totalWeight = options.Sum(o => o.Weight);
+            var random = new Random().NextDouble() * totalWeight;
+            var currentWeight = 0.0;
+            Option targetOption = options[0];
+
+            foreach (var option in options)
+            {
+                currentWeight += option.Weight;
+                if (random <= currentWeight)
+                {
+                    targetOption = option;
+                    break;
+                }
+            }
+
+            // Find the target segment
+            var targetSegment = segments.First(s => s.Option.Id == targetOption.Id);
+
+            // Calculate target angle (middle of the segment, adjusted for pointer position)
+            var targetAngle = (targetSegment.StartAngle + targetSegment.EndAngle) / 2;
+
+            // Spin the wheel to the target position
+            await jsModule.InvokeVoidAsync("spinWheel", canvasRef, targetAngle);
+
+            // Wait for animation to complete (3 seconds)
+            await Task.Delay(3000);
+
+            selectedOption = targetOption;
+            await OnOptionSelected.InvokeAsync(targetOption);
+        }
+        finally
+        {
+            isSpinning = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnWheelClick()
+    {
+        if (!isSpinning)
+        {
+            await SpinWheel();
+        }
+    }
+
+    private string[] GenerateColors(int count)
+    {
+        var colors = new string[count];
+        var hueStep = 360.0 / count;
+
+        for (int i = 0; i < count; i++)
+        {
+            var hue = i * hueStep;
+            var saturation = 70 + (i % 3) * 10; // 70-90%
+            var lightness = 50 + (i % 4) * 5;   // 50-65%
+
+            colors[i] = $"hsl({hue:F0}, {saturation}%, {lightness}%)";
+        }
+
+        return colors;
+    }
+
+    public void Dispose()
+    {
+        jsModule?.DisposeAsync();
+    }
+}
