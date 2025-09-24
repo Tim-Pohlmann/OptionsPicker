@@ -14,7 +14,7 @@ A modern web application built with Blazor WebAssembly for making random decisio
 
 ## 🚀 Live Demo
 
-Visit the live application: [Options Picker on GitHub Pages](https://yourusername.github.io/OptionsPicker/)
+Visit the live application: [Options Picker on GitHub Pages](https://tim-pohlmann.github.io/OptionsPicker/)
 
 ## 📱 Usage
 
