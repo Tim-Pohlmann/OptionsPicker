@@ -54,9 +54,18 @@ The application runs on:
 - **Reference specific files/lines** using `file_path:line_number` format
 
 ### Development Standards
+- **🧪 TEST-DRIVEN DEVELOPMENT IS MANDATORY**
+  - **ALWAYS write tests BEFORE implementing new features**
+  - **NEVER commit code without corresponding tests**
+  - **Every new service, component, or business logic MUST have tests**
 - **Modern C#** - Use latest language features and patterns
-- **Test-Driven Development** - Write tests before implementation
 - **Testing Framework**: MSTest with Shouldly assertions and NSubstitute for mocking
+
+### TDD Workflow (FOLLOW STRICTLY)
+1. **Write failing test first** - Red
+2. **Write minimal code to pass** - Green
+3. **Refactor while keeping tests green** - Refactor
+4. **Commit both test and implementation together**
 
 ### Test Commands
 ```bash
