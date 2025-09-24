@@ -13,7 +13,11 @@
       "Bash(dotnet restore:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(dotnet add package:*)",
+      "Bash(dotnet add package Shouldly)",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet test:*)"
     ],
     "deny": []
   }
