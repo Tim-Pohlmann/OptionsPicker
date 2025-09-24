@@ -1,0 +1,297 @@
+@using OptionsPicker.Models
+@using OptionsPicker.Services
+@inject IFileManager FileManager
+@inject IStateManager StateManager
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="import-export-container">
+    <div class="import-export-header">
+        <h3>📁 Import & Export Options</h3>
+        <p>Save your options to a file or load them from a previous export.</p>
+    </div>
+
+    <div class="import-export-content">
+        <!-- Export Section -->
+        <div class="export-section">
+            <div class="section-header">
+                <h4>📤 Export Options</h4>
+                <p>Download your current options as a text file.</p>
+            </div>
+
+            <button @onclick="ExportOptions"
+                    disabled="@(!currentOptions.Any() || isProcessing)"
+                    class="export-button">
+                @if (isProcessing)
+                {
+                    <span class="loading-icon">⏳</span>
+                    <span>Exporting...</span>
+                }
+                else
+                {
+                    <span class="export-icon">📥</span>
+                    <span>Export Options (@currentOptions.Count)</span>
+                }
+            </button>
+
+            @if (!currentOptions.Any())
+            {
+                <div class="info-message">
+                    <span class="info-icon">ℹ️</span>
+                    Add some options first to enable export.
+                </div>
+            }
+        </div>
+
+        <!-- Import Section -->
+        <div class="import-section">
+            <div class="section-header">
+                <h4>📥 Import Options</h4>
+                <p>Load options from a text file.</p>
+            </div>
+
+            <div class="file-input-container">
+                <input type="file"
+                       @ref="fileInput"
+                       accept=".txt,.text"
+                       @onchange="OnFileSelected"
+                       disabled="@isProcessing"
+                       class="file-input" />
+
+                <label for="file-input" class="file-input-label">
+                    <span class="upload-icon">📁</span>
+                    <span>Choose File</span>
+                </label>
+            </div>
+
+            @if (selectedFileName != null)
+            {
+                <div class="selected-file">
+                    <span class="file-icon">📄</span>
+                    <span class="file-name">@selectedFileName</span>
+
+                    @if (previewOptions != null)
+                    {
+                        <div class="import-actions">
+                            <button @onclick="() => ImportOptions(false)"
+                                    disabled="@isProcessing"
+                                    class="import-button replace-button">
+                                <span class="replace-icon">🔄</span>
+                                <span>Replace All (@previewOptions.Count options)</span>
+                            </button>
+
+                            <button @onclick="() => ImportOptions(true)"
+                                    disabled="@isProcessing"
+                                    class="import-button merge-button">
+                                <span class="merge-icon">➕</span>
+                                <span>Add to Existing</span>
+                            </button>
+                        </div>
+
+                        <div class="preview-section">
+                            <h5>Preview:</h5>
+                            <div class="preview-list">
+                                @foreach (var option in previewOptions.Take(5))
+                                {
+                                    <div class="preview-option">
+                                        <span class="option-name">@option.Name</span>
+                                        <span class="option-weight">Weight: @option.Weight.ToString("F1")</span>
+                                    </div>
+                                }
+                                @if (previewOptions.Count > 5)
+                                {
+                                    <div class="preview-more">
+                                        ... and @(previewOptions.Count - 5) more options
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- File Format Information -->
+    <div class="file-format-info">
+        <details>
+            <summary>📋 File Format Information</summary>
+            <div class="format-details">
+                <h5>Supported Format (.txt files):</h5>
+                <pre class="format-example">
+# OptionsPicker Export
+Pizza:3
+Burger:2
+Salad:1.5
+# Comments and empty lines are ignored
+                </pre>
+
+                <ul class="format-rules">
+                    <li>Each option on a new line: <code>Name:Weight</code></li>
+                    <li>Weight is optional (defaults to 1.0)</li>
+                    <li>Lines starting with # are comments</li>
+                    <li>Empty lines are ignored</li>
+                    <li>Special characters in names are supported</li>
+                </ul>
+            </div>
+        </details>
+    </div>
+
+    <!-- Status Messages -->
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <div class="status-message @(isError ? "error" : "success")">
+            <span class="status-icon">@(isError ? "❌" : "✅")</span>
+            <span>@statusMessage</span>
+        </div>
+    }
+</div>
+
+@code {
+    private ElementReference fileInput;
+    private IReadOnlyList<Option> currentOptions = new List<Option>();
+    private IReadOnlyList<Option>? previewOptions;
+    private string? selectedFileName;
+    private bool isProcessing = false;
+    private string statusMessage = "";
+    private bool isError = false;
+    private IJSObjectReference? jsModule;
+
+    protected override async Task OnInitializedAsync()
+    {
+        StateManager.OptionsChanged += OnOptionsChanged;
+        currentOptions = StateManager.CurrentOptions;
+        jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/file-utils.js");
+    }
+
+    private void OnOptionsChanged(object? sender, IReadOnlyList<Option> options)
+    {
+        currentOptions = options;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ExportOptions()
+    {
+        if (!currentOptions.Any() || isProcessing) return;
+
+        isProcessing = true;
+        statusMessage = "";
+        StateHasChanged();
+
+        try
+        {
+            var dataUrl = await FileManager.GenerateDownloadFileAsync(currentOptions);
+            var fileName = $"options-{DateTime.Now:yyyyMMdd-HHmmss}.txt";
+
+            // Trigger download using JavaScript
+            if (jsModule != null)
+            {
+                await jsModule.InvokeVoidAsync("downloadFile", dataUrl, fileName);
+            }
+
+            statusMessage = $"Successfully exported {currentOptions.Count} options to {fileName}";
+            isError = false;
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Export failed: {ex.Message}";
+            isError = true;
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnFileSelected(ChangeEventArgs e)
+    {
+        var file = e.Value?.ToString();
+        if (string.IsNullOrEmpty(file))
+        {
+            selectedFileName = null;
+            previewOptions = null;
+            statusMessage = "";
+            StateHasChanged();
+            return;
+        }
+
+        selectedFileName = file;
+        statusMessage = "";
+        isError = false;
+        StateHasChanged();
+
+        try
+        {
+            // Read file content using JavaScript
+            string fileContent = "";
+            if (jsModule != null)
+            {
+                fileContent = await jsModule.InvokeAsync<string>("readFile", fileInput);
+            }
+            previewOptions = await FileManager.ImportOptionsAsync(fileContent);
+
+            statusMessage = $"Preview loaded: {previewOptions.Count} options found";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Failed to read file: {ex.Message}";
+            isError = true;
+            previewOptions = null;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task ImportOptions(bool merge)
+    {
+        if (previewOptions == null || isProcessing) return;
+
+        isProcessing = true;
+        statusMessage = "";
+        StateHasChanged();
+
+        try
+        {
+            if (merge)
+            {
+                // Add to existing options
+                foreach (var option in previewOptions)
+                {
+                    StateManager.AddOption(option);
+                }
+                statusMessage = $"Successfully added {previewOptions.Count} options";
+            }
+            else
+            {
+                // Replace all options
+                StateManager.UpdateOptions(previewOptions);
+                // No need to loop since UpdateOptions replaces all
+                statusMessage = $"Successfully replaced options with {previewOptions.Count} new options";
+            }
+
+            isError = false;
+
+            // Clear selection
+            selectedFileName = null;
+            previewOptions = null;
+            fileInput = default;
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Import failed: {ex.Message}";
+            isError = true;
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        StateManager.OptionsChanged -= OnOptionsChanged;
+        jsModule?.DisposeAsync();
+    }
+}
