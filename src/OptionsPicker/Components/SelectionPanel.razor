@@ -1,0 +1,196 @@
+@using OptionsPicker.Models
+@using OptionsPicker.Services
+@inject ISelectionService SelectionService
+@implements IDisposable
+
+<div class="selection-panel">
+    <!-- Current Selection Display -->
+    @if (lastSelection != null)
+    {
+        <div class="current-selection @(isSelecting ? "selecting" : "")">
+            <div class="selection-result">
+                <div class="winner-label">🎉 Winner!</div>
+                <div class="winner-name">@lastSelection.SelectedOption.Name</div>
+                <div class="selection-details">
+                    Selected at @lastSelection.SelectionTime.ToString("HH:mm:ss")
+                    • Weight: @lastSelection.SelectedOption.Weight.ToString("F1")
+                    • @GetPercentage(lastSelection).ToString("F1")% chance
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="no-selection">
+            <div class="selection-prompt">
+                <span class="prompt-icon">🎯</span>
+                <div class="prompt-text">Ready to pick an option?</div>
+                <div class="prompt-subtext">Click the button below to make a selection</div>
+            </div>
+        </div>
+    }
+
+    <!-- Selection Button -->
+    <div class="selection-controls">
+        <button @onclick="HandleSelection"
+                disabled="@(isSelecting || !hasOptions)"
+                class="pick-button @(isSelecting ? "selecting" : "")">
+            @if (isSelecting)
+            {
+                <span class="spinner">⏳</span>
+                <span>Selecting...</span>
+            }
+            else
+            {
+                <span class="pick-icon">🎲</span>
+                <span>Pick Random Option</span>
+            }
+        </button>
+
+        @if (!hasOptions)
+        {
+            <div class="no-options-message">
+                Add some options above to get started!
+            </div>
+        }
+    </div>
+
+    <!-- Selection History -->
+    @if (selectionHistory.Any())
+    {
+        <div class="selection-history">
+            <div class="history-header">
+                <h3>Recent Selections</h3>
+                <div class="history-controls">
+                    <span class="history-count">@selectionHistory.Count selection@(selectionHistory.Count == 1 ? "" : "s")</span>
+                    <button @onclick="ClearHistory" class="clear-history-button">Clear History</button>
+                </div>
+            </div>
+
+            <div class="history-list">
+                @foreach (var selection in selectionHistory.TakeLast(10).Reverse())
+                {
+                    <div class="history-item @(selection == lastSelection ? "latest" : "")">
+                        <div class="history-option-name">@selection.SelectedOption.Name</div>
+                        <div class="history-details">
+                            @selection.SelectionTime.ToString("HH:mm:ss")
+                            • @GetPercentage(selection).ToString("F1")%
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (selectionHistory.Count > 10)
+            {
+                <div class="history-more">
+                    ... and @(selectionHistory.Count - 10) more
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Selection Statistics -->
+    @if (selectionCounts.Any())
+    {
+        <div class="selection-statistics">
+            <div class="stats-header">
+                <h3>Selection Statistics</h3>
+                <button @onclick="ResetStats" class="reset-stats-button">Reset Stats</button>
+            </div>
+
+            <div class="stats-list">
+                @foreach (var stat in selectionCounts.OrderByDescending(s => s.Value))
+                {
+                    <div class="stats-item">
+                        <div class="stats-option-name">@stat.Key</div>
+                        <div class="stats-details">
+                            <span class="stats-count">@stat.Value time@(stat.Value == 1 ? "" : "s")</span>
+                            <span class="stats-percentage">
+                                (@((stat.Value / (double)selectionHistory.Count * 100).ToString("F1"))%)
+                            </span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<Option> Options { get; set; } = new List<Option>();
+
+    private bool isSelecting = false;
+    private bool hasOptions => Options.Any();
+    private SelectionResult? lastSelection;
+    private List<SelectionResult> selectionHistory = new();
+    private Dictionary<string, int> selectionCounts = new();
+
+    protected override void OnInitialized()
+    {
+        SelectionService.SelectionMade += OnSelectionMade;
+        SelectionService.SelectionStateChanged += OnSelectionStateChanged;
+
+        // Initialize with current state
+        isSelecting = SelectionService.IsSelecting;
+        lastSelection = SelectionService.LastSelection;
+        selectionHistory = SelectionService.SelectionHistory.ToList();
+        selectionCounts = SelectionService.GetSelectionCounts();
+    }
+
+    private async Task HandleSelection()
+    {
+        if (isSelecting || !hasOptions) return;
+
+        try
+        {
+            await SelectionService.SelectRandomOptionAsync();
+        }
+        catch (Exception ex)
+        {
+            // Log error or show user-friendly message
+            Console.WriteLine($"Selection error: {ex.Message}");
+        }
+    }
+
+    private void OnSelectionMade(object? sender, SelectionResult result)
+    {
+        lastSelection = result;
+        selectionHistory = SelectionService.SelectionHistory.ToList();
+        selectionCounts = SelectionService.GetSelectionCounts();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnSelectionStateChanged(object? sender, bool selecting)
+    {
+        isSelecting = selecting;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void ClearHistory()
+    {
+        SelectionService.ClearHistory();
+        selectionHistory.Clear();
+        lastSelection = SelectionService.LastSelection;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void ResetStats()
+    {
+        SelectionService.ResetStatistics();
+        selectionHistory.Clear();
+        selectionCounts.Clear();
+        lastSelection = null;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private double GetPercentage(SelectionResult selection)
+    {
+        return (selection.SelectedOption.Weight / selection.TotalWeight) * 100;
+    }
+
+    public void Dispose()
+    {
+        SelectionService.SelectionMade -= OnSelectionMade;
+        SelectionService.SelectionStateChanged -= OnSelectionStateChanged;
+    }
+}

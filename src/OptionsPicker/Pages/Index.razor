@@ -1,4 +1,8 @@
 ﻿@page "/"
+@using OptionsPicker.Models
+@using OptionsPicker.Services
+@inject IStateManager StateManager
+@implements IDisposable
 
 <PageTitle>Options Picker</PageTitle>
 
@@ -9,6 +13,29 @@
     </header>
 
     <main>
-        <OptionsManager />
+        <OptionsManager @ref="optionsManager" />
+        <SelectionPanel Options="currentOptions" />
     </main>
 </div>
+
+@code {
+    private OptionsManager? optionsManager;
+    private IReadOnlyList<Option> currentOptions = new List<Option>();
+
+    protected override void OnInitialized()
+    {
+        StateManager.OptionsChanged += OnOptionsChanged;
+        currentOptions = StateManager.CurrentOptions;
+    }
+
+    private void OnOptionsChanged(object? sender, IReadOnlyList<Option> options)
+    {
+        currentOptions = options;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        StateManager.OptionsChanged -= OnOptionsChanged;
+    }
+}

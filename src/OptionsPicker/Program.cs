@@ -12,5 +12,6 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 // Register application services
 builder.Services.AddSingleton<IOptionCollection, OptionCollection>();
 builder.Services.AddSingleton<IStateManager, StateManager>();
+builder.Services.AddSingleton<ISelectionService, SelectionService>();
 
 await builder.Build().RunAsync();
